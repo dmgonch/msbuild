@@ -74,6 +74,11 @@ namespace Microsoft.Build.BackEnd
         private int _nodeLimitOffset;
 
         /// <summary>
+        /// If MSBUILDYIELDINGNODESLIMIT is set, this will add an offset to the limit used in AtSchedulingLimit()
+        /// </summary>
+        private int _yieldingNodesLimit;
+
+        /// <summary>
         /// { nodeId -> NodeInfo }
         /// A list of nodes we know about.  For the non-distributed case, there will be no more nodes than the
         /// maximum specified on the command-line.
@@ -165,6 +170,7 @@ namespace Microsoft.Build.BackEnd
             string strNodeLimitOffset = null;
 
             _nodeLimitOffset = 0;
+            _yieldingNodesLimit = 0;
 
             if (!String.IsNullOrEmpty(_schedulingUnlimitedVariable))
             {
@@ -183,6 +189,17 @@ namespace Microsoft.Build.BackEnd
                     if (_nodeLimitOffset < 0)
                     {
                         _nodeLimitOffset = 0;
+                    }
+                }
+
+                string strYieldingNodesLimit = Environment.GetEnvironmentVariable("MSBUILDYIELDINGNODESLIMIT");
+                if (!String.IsNullOrEmpty(strYieldingNodesLimit))
+                {
+                    _yieldingNodesLimit = Int16.Parse(strYieldingNodesLimit, CultureInfo.InvariantCulture);
+
+                    if (_yieldingNodesLimit < 0)
+                    {
+                        _yieldingNodesLimit = 0;
                     }
                 }
             }
@@ -1303,6 +1320,12 @@ namespace Microsoft.Build.BackEnd
                     break;
             }
 
+            if (_yieldingNodesLimit > 0)
+            {
+                return _schedulingData.YieldingRequestsCount >= _yieldingNodesLimit ||
+                       _schedulingData.ExecutingRequestsCount >= limit;
+            }
+
             // We're at our limit of schedulable requests if: 
             // (1) MaxNodeCount requests are currently executing
             // (2) Fewer than MaxNodeCount requests are currently executing but the sum of executing 
@@ -2360,13 +2383,13 @@ namespace Microsoft.Build.BackEnd
                     FileUtilities.EnsureDirectoryExists(_debugDumpPath);
                     using (StreamWriter file = FileUtilities.OpenWrite(String.Format(CultureInfo.CurrentCulture, Path.Combine(_debugDumpPath, "SchedulerState_{0}.txt"), Process.GetCurrentProcess().Id), append: true))
                     {
-                        file.WriteLine("Scheduler state at timestamp {0}:", _schedulingData.EventTime.Ticks);
+                        file.WriteLine("Scheduler state at timestamp {0} [YieldingNodesLimit={1},ExecutingRequestsCount=[2],YieldingRequestsCount={3}]:", _schedulingData.EventTime.Ticks, _yieldingNodesLimit, _schedulingData.ExecutingRequestsCount, _schedulingData.YieldingRequestsCount);
                         file.WriteLine("------------------------------------------------");
 
                         foreach (int nodeId in _availableNodes.Keys)
                         {
                             file.WriteLine(
-                                "Node {0} {1} ({2} assigned requests, {3} configurations)",
+                                "Node {0} {1} ({2} assigned requests, {3} yielding requests, {4} configurations)",
                                 nodeId,
                                 _schedulingData.IsNodeWorking(nodeId)
                                     ? string.Format(
@@ -2376,6 +2399,7 @@ namespace Microsoft.Build.BackEnd
                                             .BuildRequest.GlobalRequestId)
                                     : "Idle",
                                 _schedulingData.GetScheduledRequestsCountByNode(nodeId),
+                                _schedulingData.GetYieldingRequestsCountByNode(nodeId),
                                 _schedulingData.GetConfigurationsCountByNode(nodeId, false, null));
 
                             List<SchedulableRequest> scheduledRequestsByNode = new List<SchedulableRequest>(_schedulingData.GetScheduledRequestsByNode(nodeId));

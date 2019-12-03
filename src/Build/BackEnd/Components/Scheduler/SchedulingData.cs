@@ -561,6 +561,20 @@ namespace Microsoft.Build.BackEnd
         }
 
         /// <summary>
+        /// Retrieves the count of yielding requests scheduled to the specified node.
+        /// </summary>
+        public int GetYieldingRequestsCountByNode(int nodeId)
+        {
+            HashSet<SchedulableRequest> requests;
+            if (!_scheduledRequestsByNode.TryGetValue(nodeId, out requests))
+            {
+                return 0;
+            }
+
+            return requests.Where(r => r.State == SchedulableRequestState.Yielding).Count();
+        }
+
+        /// <summary>
         /// Retrieves all of the requests scheduled to the specified node.
         /// </summary>
         public IEnumerable<SchedulableRequest> GetScheduledRequestsByNode(int nodeId)
