@@ -204,6 +204,8 @@ namespace Microsoft.Build.BackEnd
                 }
             }
 
+            Console.WriteLine($"Scheduler constructor: YieldingNodesLimit = {_yieldingNodesLimit}");
+
             if (String.IsNullOrEmpty(_debugDumpPath))
             {
                 _debugDumpPath = Path.GetTempPath();
